@@ -115,13 +115,14 @@ Also, you can use conditions with arguments
             return True
         return False
 
+Don't forget to add *args or **kwargs respectivily (if needed).
 Use conditions:
 
-    @transition(source='dust', target='alive' conditions=[can_create])
+    @transition(source='dust', target='alive', conditions=[can_create])
     def create(self, user_name):
         pass
 
-    @transition(source='alive', target='dust' conditions=[can_kill])
+    @transition(source='alive', target='dust', conditions=[can_kill])
     def create(self, user_name, **kwargs):
         pass
 
