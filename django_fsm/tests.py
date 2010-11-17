@@ -141,7 +141,10 @@ class BlogPostWithFKStateTest(TestCase):
     def test_unknow_transition_fails(self):
         self.assertRaises(NotImplementedError, self.model.hide)
 
-def condition_func(instance):
+def condition_func(instance, *args, **kwargs):
+    return True
+
+def condition_func2(instance):
     return True
 
 class BlogPostWithConditions(models.Model):
@@ -153,12 +156,25 @@ class BlogPostWithConditions(models.Model):
     def unmet_condition(self, *args, **kwargs):
         return False
 
+    def variable_condition(self, user, moderator='bar'):
+        if user != moderator:
+            return False
+        return True
+
     @transition(source='new', target='published', conditions=[condition_func, model_condition])
     def publish(self):
         pass
 
     @transition(source='published', target='destroyed', conditions=[condition_func, unmet_condition])
     def destroy(self):
+        pass
+
+    @transition(source='published', target='approved', conditions=[condition_func, variable_condition])
+    def approve(self, *args, **kwargs):
+        pass
+
+    @transition(source='published', target='spam', conditions=[condition_func2,])
+    def mark_spam(self, *args, **kwargs):
         pass
 
 class ConditionalTest(TestCase):
@@ -179,3 +195,27 @@ class ConditionalTest(TestCase):
         self.assertFalse(can_proceed(self.model.destroy))
         self.assertFalse(self.model.destroy())
 
+    def test_variable_condition(self):
+        self.model.publish()
+        self.assertEqual(self.model.state, 'published')
+        self.assertFalse(can_proceed(self.model.approve, 'foo'))
+        self.assertTrue(can_proceed(self.model.approve, 'bar'))
+        self.assertFalse(self.model.approve('foo'))
+        self.model.approve('bar')
+        self.assertEqual(self.model.state, 'approved')
+
+    def test_variable_condition2(self):
+        self.model.publish()
+        self.assertEqual(self.model.state, 'published')
+        self.assertFalse(can_proceed(self.model.approve, 'anonymous', moderator='root'))
+        self.assertTrue(can_proceed(self.model.approve, 'root', moderator='root'))
+        self.assertFalse(self.model.approve('anonymous', moderator='root'))
+        self.model.approve('root', moderator='root')
+        self.assertEqual(self.model.state, 'approved')
+
+    def test_func_without_args_kwargs(self):
+        self.model.publish()
+        self.assertEqual(self.model.state, 'published')
+        self.assertTrue(can_proceed(self.model.mark_spam))
+        self.model.mark_spam()
+        self.assertEqual(self.model.state, 'spam')

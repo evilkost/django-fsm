@@ -53,14 +53,14 @@ class FSMMeta(object):
         """
         return self.transitions.has_key(FSMMeta.current_state(instance)) or self.transitions.has_key('*')
 
-    def conditions_met(self, instance):
+    def conditions_met(self, instance, *args, **kwargs):
         """
         Check if all conditions has been met
         """
         current_state = FSMMeta.current_state(instance)
         next = self.transitions.has_key(current_state) and self.transitions[current_state] or self.transitions['*']
 
-        return all(map(lambda f: f(instance), self.conditions[next]))
+        return all(map(lambda f: f(instance, *args, **kwargs), self.conditions[next]))
 
     def to_next_state(self, instance):
         """
@@ -102,9 +102,8 @@ def transition(source='*', target=None, save=False, conditions=[]):
                 raise NotImplementedError("Can't switch from state '%s' using method '%s'" % (FSMMeta.current_state(instance), func.func_name))
             
             for condition in conditions:
-                if not condition(instance):
+                if not condition(instance, *args, **kwargs):
                     return False
-
             func(instance, *args, **kwargs)
 
             meta.to_next_state(instance)
@@ -119,7 +118,7 @@ def transition(source='*', target=None, save=False, conditions=[]):
     return inner_transition
 
 
-def can_proceed(bound_method):
+def can_proceed(bound_method, *args, **kwargs):
     """
     Returns True if model in state allows to call bound_method 
     """
@@ -127,7 +126,7 @@ def can_proceed(bound_method):
         raise NotImplementedError('%s method is not transition' % bound_method.im_func.__name__)
 
     meta = bound_method._django_fsm
-    return meta.has_transition(bound_method.im_self) and meta.conditions_met(bound_method.im_self)
+    return meta.has_transition(bound_method.im_self) and meta.conditions_met(bound_method.im_self, *args, **kwargs)
 
 
 class FSMField(models.Field):
