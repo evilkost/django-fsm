@@ -101,20 +101,29 @@ Use the conditions like this:
         Side effects galore
         """
 
+Also, you can use conditions with arguments
+
+    def can_create(instance, user_name):
+        if user_name == u'God'
+            return True
+        return False
+
+    def can_kill(instance, user_name, zone=u'Holy land')
+        if user_name == u'God':
+            return True
+        elif zone != u'Holy land' and user_name == u'Devil':
+            return True
+        return False
+
+Use conditions:
+
+    @transition(source='dust', target='alive' conditions=[can_create])
+    def create(self, user_name):
+        pass
+
+    @transition(source='alive', target='dust' conditions=[can_kill])
+    def create(self, user_name, **kwargs):
+        pass
 
 If you store the states in the db table you could use FSMKeyField to
 ensure Foreign Key database integrity.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
