@@ -60,7 +60,10 @@ class FSMMeta(object):
         current_state = FSMMeta.current_state(instance)
         next = self.transitions.has_key(current_state) and self.transitions[current_state] or self.transitions['*']
 
-        return all(map(lambda f: f(instance, *args, **kwargs), self.conditions[next]))
+        try:
+            return all(map(lambda f: f(instance, *args, **kwargs), self.conditions[next]))
+        except TypeError:
+            return False
 
     def to_next_state(self, instance):
         """
@@ -96,7 +99,7 @@ def transition(source='*', target=None, save=False, conditions=[]):
         func._django_fsm.conditions[target] = conditions
 
         @wraps(func)
-        def _change_state(instance, *args, **kwargs):            
+        def _change_state(instance, *args, **kwargs):
             meta = func._django_fsm
             if not meta.has_transition(instance):
                 raise NotImplementedError("Can't switch from state '%s' using method '%s'" % (FSMMeta.current_state(instance), func.func_name))
@@ -109,12 +112,12 @@ def transition(source='*', target=None, save=False, conditions=[]):
             meta.to_next_state(instance)
             if save:
                 instance.save()
-        
+
         return _change_state
-    
+
     if not target:
         raise ValueError("Result state not specified")
-    
+
     return inner_transition
 
 
@@ -128,6 +131,35 @@ def can_proceed(bound_method, *args, **kwargs):
     meta = bound_method._django_fsm
     return meta.has_transition(bound_method.im_self) and meta.conditions_met(bound_method.im_self, *args, **kwargs)
 
+def accessible_states(instance, *args, **kwargs):
+    """
+    Return list of accessible states from current state and given arguments
+    @instance: instance of django model with FSMField and functions decorated with transition
+    """
+    if not hasattr(instance.__class__, '_state_actions'):
+        state_actions = defaultdict(list)
+        for attr in dir(instance):
+            try:
+                attr_obj = getattr(instance, attr)
+            except AttributeError:
+                pass
+            if hasattr(attr_obj, '__call__') and hasattr(attr_obj, '_django_fsm'):
+                for source, target in attr_obj._django_fsm.transitions.iteritems():
+                    state_actions[source].append((
+                        attr_obj,
+                        target,
+                    ))
+
+        instance.__class__._state_actions = state_actions
+    else:
+        state_actions = instance.__class__._state_actions
+
+    states = []
+    for action, target in state_actions[FSMMeta.current_state(instance)]:
+        if action._django_fsm.conditions_met(instance, *args, **kwargs):
+            states.append((action, target))
+
+    return states
 
 class FSMField(models.Field):
     """
@@ -135,14 +167,13 @@ class FSMField(models.Field):
 
     """
     __metaclass__ = models.SubfieldBase
-    
+
     def __init__(self, *args, **kwargs):
         kwargs['max_length'] = 50
         super(FSMField, self).__init__(*args, **kwargs)
 
     def get_internal_type(self):
         return 'CharField'
-
 
 class FSMKeyField(models.ForeignKey):
     """

@@ -5,7 +5,7 @@ from django.test import TestCase
 from django.db import models
 
 from django_fsm.db.fields import FSMField, FSMKeyField, \
-    transition, can_proceed
+    transition, can_proceed, accessible_states
 
 class BlogPost(models.Model):
     state = FSMField(default='new')
@@ -149,6 +149,7 @@ def condition_func2(instance):
 
 class BlogPostWithConditions(models.Model):
     state = FSMField(default='new')
+    accessible = accessible_states
 
     def model_condition(self, *args, **kwargs):
         return True
@@ -173,7 +174,11 @@ class BlogPostWithConditions(models.Model):
     def approve(self, *args, **kwargs):
         pass
 
-    @transition(source='published', target='spam', conditions=[condition_func2,])
+    @transition(source='published', target='holy', conditions=[variable_condition])
+    def bless(self, *args, **kwargs):
+        pass
+
+    @transition(source=['published', 'new'], target='spam', conditions=[condition_func2,])
     def mark_spam(self, *args, **kwargs):
         pass
 
@@ -219,3 +224,18 @@ class ConditionalTest(TestCase):
         self.assertTrue(can_proceed(self.model.mark_spam))
         self.model.mark_spam()
         self.assertEqual(self.model.state, 'spam')
+
+    def test_accessible_states(self):
+        self.assertEqual(
+            sorted(map(lambda (f,s): (f.func_name, s), accessible_states(self.model))),
+            sorted([('publish', 'published'), ('mark_spam', 'spam')])
+        )
+        self.model.publish()
+        self.assertEqual(
+            sorted(map(lambda (f,s): (f.func_name, s), accessible_states(self.model))),
+            sorted([('mark_spam', 'spam')])
+        )
+        self.assertEqual(
+            sorted(map(lambda (f,s): (f.func_name, s), accessible_states(self.model, 'bar'))),
+            sorted([('approve', 'approved'), ('bless', 'holy')])
+        )
